@@ -13,12 +13,14 @@ namespace Assignment_1
         private Thread workingThread;
         Random rand;
         bool done;
+        private int timeout;
 
-        public Consumer(SafeRing buffer, Random rand)
+        public Consumer(SafeRing buffer, Random rand, int timeout = -1)
         {
             this.buffer = buffer;
             this.rand = rand;
-        }
+            this.timeout = timeout;
+    }
 
         // Starts a new thread to do the consuming work
         public void Start()
@@ -38,7 +40,7 @@ namespace Assignment_1
                 try
                 {
                         // Get the number from the queue
-                        int num1 = buffer.Remove();
+                        int num1 = buffer.Remove(timeout);
 
                         // Generate a second Number 1 to 1000
                         int num2 = rand.Next(1, 1001);
@@ -50,6 +52,10 @@ namespace Assignment_1
                 catch (ThreadInterruptedException tie)
                 {
                     Console.WriteLine("Info: Consumer Thread Inturrupted: " + tie.Message);
+                }
+                catch (TimeoutException te)
+                {
+                    Console.WriteLine("Warning: Consumer timeout, retrying: " + te);
                 }
                 catch (Exception e)
                 {

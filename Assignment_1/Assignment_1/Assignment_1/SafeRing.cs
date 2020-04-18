@@ -19,6 +19,7 @@ namespace Assignment_1
         private ManualResetEvent hasItems;
         private ManualResetEvent hasCapacity;
         private Mutex mutex;
+        private ManualResetEvent isEmpty;
 
 
         public SafeRing(int capacity)
@@ -31,13 +32,17 @@ namespace Assignment_1
             hasItems = new ManualResetEvent(false);
             hasCapacity = new ManualResetEvent(true);
             mutex = new Mutex();
+            isEmpty = new ManualResetEvent(true);
         }
 
-        public int Remove()
+        public int Remove(int timeout = -1)
         {
             Console.WriteLine("Info: Removing...");
-            // Wait until it's safe to remove and there is at least 1 item in the queue.
-            WaitHandle.WaitAll(new WaitHandle[] { mutex, hasItems });
+            // Wait until it's safe to remove and there is at least 1 item in the queue
+            if (!WaitHandle.WaitAll(new WaitHandle[] { mutex, hasItems }, timeout))
+            {
+                throw new TimeoutException();
+            }
 
             // Remove an item...
             int i = buffer[head];
@@ -46,10 +51,15 @@ namespace Assignment_1
                 
             // Signal we now have capacity 
             hasCapacity.Set();
+            //     // maybe??
 
             // If we emptied the queue, signal that we do NOT have any items available.
             if (size == 0)
+            {
                 hasItems.Reset();
+                isEmpty.Set();
+            }
+                
 
             // Print out what we removed
             Console.WriteLine("Removed: " + i);
@@ -59,23 +69,27 @@ namespace Assignment_1
             return i;
         }
 
-        public void Insert(int i)
+        public void Insert(int i, int timeout = -1)
         {
             Console.WriteLine("Info: Inserting...");
-            WaitHandle.WaitAll(new WaitHandle[] { mutex, hasCapacity });
+            // Wait until it's safe to remove and there is at least 1 item in the queue
+            if(!WaitHandle.WaitAll(new WaitHandle[] { mutex, hasCapacity }, timeout))
+            {
+                throw new TimeoutException();
+            }
 
             // Remove an item...
             buffer[tail] = i;
             tail = (tail + 1) % capacity;
             size++;
 
-
             // Signal we now have capacity 
             hasItems.Set();
+            isEmpty.Reset();
 
             // If we maxed out the queue, signal that we have NO capacity available.
             if (size == capacity)
-                hasCapacity.Reset();
+                hasCapacity.Reset();    // Stop any thread that want's to remove an item
 
             // Print out what we removed
             Console.WriteLine("Inserted: " + i);
@@ -91,6 +105,12 @@ namespace Assignment_1
             mutex.ReleaseMutex();
 
             return count;           
+        }
+
+        // Block calling thread until the queue is empty (size == 0)
+        public void WaitUntilEmpty()
+        {
+            isEmpty.WaitOne();
         }
     }
 }

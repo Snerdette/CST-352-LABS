@@ -13,6 +13,9 @@ namespace Assignment_1
         const int nProducers = 2;
         const int nConsumers = 2;
         const int nItems = 10;
+        const int timeout = 10;
+        const int numRetries = 5;
+        const int backoffTime = 1000;
 
         static void Main(string[] args)
         {
@@ -25,7 +28,7 @@ namespace Assignment_1
             Random rand = new Random();
             for (int i = 0; i < nProducers; i++)
             {
-                Producer p = new Producer(buffer, nItems, rand);
+                Producer p = new Producer(buffer, nItems, rand, numRetries, backoffTime, timeout);
                 completeEvents[i] = p.Complete;
                 p.Start();
                 producers.Add(p);
@@ -35,7 +38,7 @@ namespace Assignment_1
             List<Consumer> consumers = new List<Consumer>();
             for (int i = 0; i < nConsumers; i++)
             {
-                Consumer c = new Consumer(buffer, rand);
+                Consumer c = new Consumer(buffer, rand, timeout);
                 c.Start();
                 consumers.Add(c);
             }
@@ -43,7 +46,7 @@ namespace Assignment_1
 
             // Wait for all producers to complete then signal consumers to stop
             WaitHandle.WaitAll(completeEvents);
-            // TODO: buffer.WaitUntilEmpty();           
+            buffer.WaitUntilEmpty();           
             consumers.ForEach(c => { c.Stop(); });
 
             Console.WriteLine("Main Thread Exiting!");

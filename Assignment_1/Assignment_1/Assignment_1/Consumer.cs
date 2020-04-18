@@ -9,16 +9,15 @@ namespace Assignment_1
 {
     public class Consumer
     {
-        private Thread workingThread;
         private SafeRing buffer;
+        private Thread workingThread;
         Random rand;
-        bool done = false;
+        bool done;
 
         public Consumer(SafeRing buffer, Random rand)
         {
             this.buffer = buffer;
             this.rand = rand;
-
         }
 
         // Starts a new thread to do the consuming work
@@ -26,26 +25,23 @@ namespace Assignment_1
         {
             workingThread = new Thread(Consume);
             workingThread.Start(this);
-
         }
 
         // Method running on the working thread
         // When this method ecxits, the thread will stop
-        private static void Consume(Object param)
+        private void Consume()
         {
-            Consumer c = param as Consumer;
-
             // Do the comsuming thing, until we are told to stop
-            c.done = false;
-            while (!c.done)
+            done = false;
+            while (!done)
             { 
                 try
                 {
                         // Get the number from the queue
-                        int num1 = c.buffer.Remove();
+                        int num1 = buffer.Remove();
 
                         // Generate a second Number 1 to 1000
-                        int num2 = c.rand.Next(1, 1001);
+                        int num2 = rand.Next(1, 1001);
 
                         // Sleep for that amount of time
                         Console.WriteLine("Info: Consumer Sleeping...");

@@ -14,6 +14,7 @@ namespace Assignment_1
         private SafeRing buffer;
         private Thread workingThread;
         private Random rand;
+
         public Producer(SafeRing buffer, int numItemsToProduce, Random rand)
         {
             this.buffer = buffer;
@@ -36,21 +37,18 @@ namespace Assignment_1
         // Method that does actual production.
         // This will run on the working thread.
         // When this method exits, the thread will stop.
-        private static void Produce(Object param)
+        private void Produce()
         {
-            // Reclaim the producer instance from the thread parameter
-            Producer p = param as Producer;
-
             // Now onto production...
-            for (int i = 0; i < p.numItemsToProduce; i++)
+            for (int i = 0; i < numItemsToProduce; i++)
             {
                 // Randomly generate numbers between 1 and 1,000
-                int num = p.rand.Next(1, 1001);
+                int num = rand.Next(1, 1001);
 
                 try
                 {
                     // Inset number into the queue
-                    p.buffer.Insert(num);
+                    buffer.Insert(num);
 
                     // Sleep the thread for that many msec's
                     Console.WriteLine("Info: Producer Sleeping...");
@@ -64,11 +62,10 @@ namespace Assignment_1
                 {
                     Console.WriteLine("Error: Producer Exception: " + e.Message);
                 }
-                  
             }
 
             // Signals Complete
-            p.completeEvent.Set();
+            completeEvent.Set();
         }
 
         // Signaled when the producer is done producing

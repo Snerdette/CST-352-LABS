@@ -22,9 +22,10 @@ namespace Assignment_1
             // Instantiates and starts nProducers producers, each to produce nItems items
             List<Producer> producers = new List<Producer>();
             WaitHandle[] completeEvents = new WaitHandle[nProducers];
+            Random rand = new Random();
             for (int i = 0; i < nProducers; i++)
             {
-                Producer p = new Producer(buffer, nItems);
+                Producer p = new Producer(buffer, nItems, rand);
                 completeEvents[i] = p.Complete;
                 p.Start();
                 producers.Add(p);
@@ -34,7 +35,7 @@ namespace Assignment_1
             List<Consumer> consumers = new List<Consumer>();
             for (int i = 0; i < nConsumers; i++)
             {
-                Consumer c = new Consumer(buffer);
+                Consumer c = new Consumer(buffer, rand);
                 c.Start();
                 consumers.Add(c);
             }
@@ -44,6 +45,8 @@ namespace Assignment_1
             WaitHandle.WaitAll(completeEvents);
             // TODO: buffer.WaitUntilEmpty();           
             consumers.ForEach(c => { c.Stop(); });
+
+            Console.WriteLine("Main Thread Exiting!");
             
             
         }

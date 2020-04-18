@@ -35,6 +35,7 @@ namespace Assignment_1
 
         public int Remove()
         {
+            Console.WriteLine("Info: Removing...");
             // Wait until it's safe to remove and there is at least 1 item in the queue.
             WaitHandle.WaitAll(new WaitHandle[] { mutex, hasItems });
 
@@ -42,14 +43,16 @@ namespace Assignment_1
             int i = buffer[head];
             head = (head + 1) % capacity;
             size--;
-            
-            
+                
             // Signal we now have capacity 
             hasCapacity.Set();
 
             // If we emptied the queue, signal that we do NOT have any items available.
             if (size == 0)
                 hasItems.Reset();
+
+            // Print out what we removed
+            Console.WriteLine("Removed: " + i);
 
             // Release the Mutex!!!
             mutex.ReleaseMutex();
@@ -58,6 +61,7 @@ namespace Assignment_1
 
         public void Insert(int i)
         {
+            Console.WriteLine("Info: Inserting...");
             WaitHandle.WaitAll(new WaitHandle[] { mutex, hasCapacity });
 
             // Remove an item...
@@ -72,6 +76,9 @@ namespace Assignment_1
             // If we maxed out the queue, signal that we have NO capacity available.
             if (size == capacity)
                 hasCapacity.Reset();
+
+            // Print out what we removed
+            Console.WriteLine("Inserted: " + i);
 
             // Release the Mutex!!!
             mutex.ReleaseMutex();

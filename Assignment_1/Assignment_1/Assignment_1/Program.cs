@@ -49,7 +49,8 @@ namespace Assignment_1
             buffer.WaitUntilEmpty();           
             consumers.ForEach(c => { c.Stop(); });
 
-            Console.WriteLine("Main Thread Exiting!");
+            Console.WriteLine("Program is Done!");
+            Console.ReadLine();
             
             
         }

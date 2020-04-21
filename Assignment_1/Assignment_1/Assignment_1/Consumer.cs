@@ -26,7 +26,7 @@ namespace Assignment_1
         public void Start()
         {
             workingThread = new Thread(Consume);
-            workingThread.Start(this);
+            workingThread.Start();
         }
 
         // Method running on the working thread

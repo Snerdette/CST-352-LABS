@@ -37,7 +37,7 @@ namespace Assignment_1
         public void Start()
         {
             workingThread = new Thread(Produce);
-            workingThread.Start(this);
+            workingThread.Start();
         }
 
         // Method that does actual production.

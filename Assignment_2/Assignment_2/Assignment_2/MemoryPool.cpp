@@ -3,8 +3,10 @@
 // By Kate LaFrance
 
 
-MemoryPool::MemoryPool(unsigned int poolSize) {
-
+MemoryPool::MemoryPool(unsigned int poolSize) :
+poolSize(poolSize)
+{
+	pool = new unsigned char[poolSize];
 }
 
 void* MemoryPool::Allocate(unsigned int nbytes) {

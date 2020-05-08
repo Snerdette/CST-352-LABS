@@ -8,7 +8,7 @@ int main()
 {
     FirstFitPool ffp(100);
     ffp.DebugPrint();
-    void* c1 = ffp.Allocate(10);
+    void* c1 = ffp.Allocate(100);
     ffp.DebugPrint();
     ffp.Free(c1);
     ffp.DebugPrint();

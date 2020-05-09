@@ -8,6 +8,7 @@ class FirstFitPool : public MemoryPool
 {
 
 public: 
-	FirstFitPool(unsigned int poolSize);
+	FirstFitPool(unsigned int poolSize); 
+	virtual void* Allocate(unsigned int nbytes);
 };
 

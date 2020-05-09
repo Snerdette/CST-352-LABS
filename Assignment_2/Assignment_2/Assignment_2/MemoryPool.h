@@ -9,7 +9,7 @@ class OutOfMemoryException{
 
 class MemoryPool 
 {
-private:
+protected:
 	class Chunk 
 	{
 	public:

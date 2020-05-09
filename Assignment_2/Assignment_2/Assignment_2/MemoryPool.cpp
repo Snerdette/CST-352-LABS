@@ -17,20 +17,15 @@ poolSize(poolSize)
 
 void* MemoryPool::Allocate(unsigned int nbytes) 
 {
-	/*
+	
 	// Allocate  chunk of memory from the pool, nbytes big
 	// If the pool is not big enough for nbytes, throw OutOfMemoryException
 	if (nbytes > poolSize)
 		throw OutOfMemoryException();
 
 	// Find an available chunk that has a size at least as large as nbytes
-	// For now, we're implementing First Fit Algorithm
-	// Find the first chunk that is not allocatedd and is at least nbytes big
-	auto iter = chunks.begin();
-	while (iter != chunks.end() && !(!iter->allocated && iter->size >= nbytes)) 
-	{
-		iter++;
-	}
+	// Algorithem is implemented in derived classes.
+	auto iter = FindAvailableChunk(nbytes);
 
 	// If we can't find one, throw OutOfMemoryException
 	if (iter ==  chunks.end())
@@ -56,7 +51,7 @@ void* MemoryPool::Allocate(unsigned int nbytes)
 		// Return a pointer to the allocated emmory referenced by the new chunk
 		return pool + saveStartingIndex;
 	}
-	*/
+	
 	return nullptr;
 }
 

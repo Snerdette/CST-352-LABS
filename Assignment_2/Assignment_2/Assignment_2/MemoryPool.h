@@ -24,12 +24,11 @@ protected:
 	unsigned int  poolSize;
 	std::vector<Chunk> chunks;
 
-protected:
-
 	MemoryPool(unsigned int poolSize);
+	virtual std::vector<Chunk>::iterator FindAvailableChunk(unsigned int nbytes) = 0;
 
 public:
-
+	// TODO: Destructor
 	virtual void* Allocate(unsigned int nbytes);
 	virtual void Free(void* block);
 	virtual void DebugPrint();

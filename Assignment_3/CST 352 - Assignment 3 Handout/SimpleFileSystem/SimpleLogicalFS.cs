@@ -4,7 +4,8 @@
 //
 // NOTE: Implement the methods and classes in this file
 //
-// TODO: Your name, date
+// Kate LaFrance
+// 5/29/2020
 //
 using System;
 using System.Collections.Generic;

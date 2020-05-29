@@ -4,7 +4,8 @@
 //
 // NOTE: Implement the methods and classes in this file
 //
-// TODO: Your name, date
+// Kate LaFrance
+// 5/29/2020
 //
 
 using System;
@@ -34,15 +35,70 @@ namespace SimpleFileSystem
         {
             // wipe all sectors of disk and create minimum required DRIVE_INFO, DIR_NODE and DATA_SECTOR
 
-            // TODO: VirtualFS.Format()
+            // Wipe all sectors (replace with "zeroes" are FREE_SECTOR)
+            int bps = disk.BytesPerSector;
+            FREE_SECTOR free = new FREE_SECTOR(bps);
+            for (int i = 0; i < disk.SectorCount; i++)
+            {
+                disk.WriteSector(i, free.RawBytes);
+            }
+
+            // Create DRIVE_INFO
+            DRIVE_INFO di = new DRIVE_INFO(bps, ROOT_DIR_SECTOR);
+            disk.WriteSector(DRIVE_INFO_SECTOR, di.RawBytes);
+
+            // Create and write the DIR_NODE for the root node...
+            DIR_NODE dn = new DIR_NODE(bps, ROOT_DATA_SECTOR, FSConstants.ROOT_DIR_NAME, 0);
+            disk.WriteSector(ROOT_DIR_SECTOR, dn.RawBytes);
+
+            // ... and an empty DATA_SECTOR
+            DATA_SECTOR ds = new DATA_SECTOR(bps, 0, null); // 0 = no next data sector, nul = empty set
+            disk.WriteSector(ROOT_DATA_SECTOR, ds.RawBytes);
+
         }
 
         public void Mount(DiskDriver disk, string mountPoint)
         {
             // read drive info from disk, load root node and connect to mountPoint
-            // for the first mounted drive, expect mountPoint to be named FSConstants.PATH_SEPARATOR as the root
+            // for the first mounted drive, expect mountPoint to be named "/", FSConstants.ROOT_DIR_NAME, as the root
+  
+            try
+            {
+                // Step 1: Read infor from the disk to understand it's directory structure
+                // Read DRIVE_INFO from FRIVE_INFO_SECTOR
+                DRIVE_INFO di = DRIVE_INFO.CreateFromBytes(disk.ReadSector(DRIVE_INFO_SECTOR));
+                DIR_NODE dn = DIR_NODE.CreateFromBytes(disk.ReadSector(di.RootNodeAt));
+                DATA_SECTOR ds = DATA_SECTOR.CreateFromBytes(disk.ReadSector(dn.FirstDataAt));
 
-            // TODO: VirtualFS.Mount()
+
+                // Step 2: Join th new disk into the virtual file system structure, at the mount point.
+                // Create a VistualDrive for the disk
+                VirtualDrive vd = new VirtualDrive(disk, DRIVE_INFO_SECTOR, di);
+
+                
+                if (rootNode == null)
+                {
+                    // Create a VirtualNode to represent the root dictionaru, at the mount point.
+                    // Set the VFS's root node, if this is the first disk to be mounted.
+                    rootNode = new VirtualNode(vd, di.RootNodeAt, dn, null);
+                    
+                }
+                else
+                {
+                    // TODO: Extra Credit:  Handle 2nd dick mounted to exsisting VFS
+                    // Create a virtual node for this new disk's root
+                    // "join" the new node to the exsisting node structure at the mount point
+                }
+
+                // Add a new VirtualDrive to drives dictionary, using te mountPoint as the key
+                drives.Add(mountPoint, vd);
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to mount disk");
+            }
+            
         }
 
         public void Unmount(string mountPoint)

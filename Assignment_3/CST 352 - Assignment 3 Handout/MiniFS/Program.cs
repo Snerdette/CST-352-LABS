@@ -2,7 +2,8 @@
 // Pete Myers
 // Spring 2018-2020
 //
-// TODO: Your name, date
+// Kate LaFrance
+// 5/29/2020
 //
 
 // NOTE: Implement the methods in this file
@@ -21,10 +22,10 @@ namespace MiniFS
         {
             try
             {
-                TestDisks();
-                TestPhysicalFileSystem();
+                //TestDisks();
+                //TestPhysicalFileSystem();
                 TestVirtualFileSystem();
-                TestLogicalFileSystem();
+                //TestLogicalFileSystem();
             }
             catch (Exception ex)
             {
@@ -77,16 +78,30 @@ namespace MiniFS
             VolatileDisk disk = new VolatileDisk(1);
             disk.TurnOn();
 
-            // TODO: FREE_SECTOR
+            // FREE_SECTOR
+            // Initialize a FREE_SECTOR and write it to disk.
+            FREE_SECTOR free1 = new FREE_SECTOR(disk.BytesPerSector);
+            disk.WriteSector(0, free1.RawBytes);
+            // REad the sector back and compare.
+            byte[] freeBytes = disk.ReadSector(0);
+            Console.WriteLine("Read sector 0, type = "+ SECTOR.GetTypeFromBytes(freeBytes));
+            FREE_SECTOR free2 = FREE_SECTOR.CreateFromBytes(freeBytes);
+            CheckBytes("Written Free sector", free1, "Read Free sector", free2);
+
 
             // TODO: DRIVE_INFO
 
             // TODO: DIR_NODE
 
             // TODO: FILE_NODE
+            //FILE_NODE file1 = new FILE_NODE(disk.BytesPerSector, 11, "foo", 12);
 
-            // TODO: DATA_SECTOR
-            
+            // DATA_SECTOR
+            int datalen = DATA_SECTOR.MaxDataLength(disk.BytesPerSector);
+            byte[] databytes = new byte[datalen];
+            DATA_SECTOR data1 = new DATA_SECTOR(disk.BytesPerSector, 42, databytes);
+            disk.WriteSector(41, data1.RawBytes);
+
             disk.TurnOff();
         }
 

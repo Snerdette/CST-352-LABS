@@ -26,6 +26,7 @@ namespace MiniFS
                 //TestPhysicalFileSystem();
                 TestVirtualFileSystem();
                 //TestLogicalFileSystem();
+                Console.ReadLine();
             }
             catch (Exception ex)
             {
@@ -126,12 +127,15 @@ namespace MiniFS
                 VirtualNode root = vfs.RootNode;
 
                 VirtualNode dir1 = root.CreateDirectoryNode("dir1");
+                dir1.CreateDirectoryNode("foo");
+                dir1.CreateDirectoryNode("bar");
                 VirtualNode dir2 = root.CreateDirectoryNode("dir2");
+                dir2.CreateDirectoryNode("hah!");
 
-                VirtualNode file1 = dir1.CreateFileNode("file1");
-                TestFileWriteRead(file1, r, 0, 100);    // 1 sector
-                TestFileWriteRead(file1, r, 0, 500);    // 2 sectors
-                TestFileWriteRead(file1, r, 250, 500);    // 3 sectors
+                //VirtualNode file1 = dir1.CreateFileNode("file1");
+                //TestFileWriteRead(file1, r, 0, 100);    // 1 sector
+                //TestFileWriteRead(file1, r, 0, 500);    // 2 sectors
+                //TestFileWriteRead(file1, r, 250, 500);    // 3 sectors
 
                 vfs.Unmount("/");
 

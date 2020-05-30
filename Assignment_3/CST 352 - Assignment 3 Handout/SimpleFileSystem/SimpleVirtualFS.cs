@@ -104,8 +104,23 @@ namespace SimpleFileSystem
         public void Unmount(string mountPoint)
         {
             // look up the drive and remove it's mountPoint
+            if (!drives.ContainsKey(mountPoint))
+                throw new Exception("Cannot unmount drive that has not been mounted!");
 
-            // TODO: VirtualFS.Unmount()
+            // Remove from the drive list
+            VirtualDrive vd = drives[mountPoint];
+            drives.Remove(mountPoint);
+
+            // Check if this drive was the first mounted drive...
+            if (mountPoint == FSConstants.ROOT_DIR_NAME)
+            {
+                // If mounted first drive, blank out the root node
+                rootNode = null;
+            } else
+            {
+                // else it;s a2nd, 3rd, etc...
+                // TODO: extra credit
+            }
         }
 
         public VirtualNode RootNode => rootNode;
@@ -129,9 +144,25 @@ namespace SimpleFileSystem
         public int[] GetNextFreeSectors(int count)
         {
             // find count available free sectors on the disk and return their addresses
-            // TODO: VirtualDrive.GetNextFreeSectors()
-
+            if (count <= 0)
+                throw new Exception("Hey! No Negative!");
+            
             int[] result = new int[count];
+
+            // Itterate over all sectors, starting at the beginning, until we find count FREE_SECTORS
+            int found = 0;
+            for (int lba = 0; found < count && lba < disk.SectorCount; lba++)
+            {
+                //byte[] bytes = disk.ReadSector(lba);
+                if (SECTOR.GetTypeFromBytes(disk.ReadSector(lba)) == SECTOR.SectorType.FREE_SECTOR)
+                {
+                    result[found++] = lba;
+                }
+            }
+
+            // If we didn't find enough free sectors, just return null
+            if (found < count)
+                return null;
 
             return result;
         }
@@ -192,18 +223,123 @@ namespace SimpleFileSystem
 
         private void LoadChildren()
         {
-            // TODO: VirtualNode.LoadChildren()
+            // Ensure that the children cache is correctly put in memory (i.e. reflects what's on the disk)
+            // Assume if the cache exsists, it is correct at the moment
+            // So, we need to call CommitChildren()
+            if (children == null)
+            {
+                // Create the cache itself
+                children = new Dictionary<string, VirtualNode>();
+
+                // Read the list of children for this directory from disk
+                // Instantiate a VirtualNode for each [child?] and add them to the children cache.
+                // Read the data sector for this directory
+                DATA_SECTOR dataSector = DATA_SECTOR.CreateFromBytes(drive.Disk.ReadSector(sector.FirstDataAt));
+                // Extract the list of children from the sata sector
+                byte[] rawList = dataSector.DataBytes;
+
+                // Foreach child in the list...
+                for (int i = 0; i < ChildCount; i++)
+                {
+                    // Getthe child's sector address 
+                    int childSectorAt = BitConverter.ToInt32(rawList, i*4);
+
+                    // Read its sector from disk
+                    // Check if it's a file or directory
+                    byte[] childNodeBytes = drive.Disk.ReadSector(childSectorAt);
+                    NODE childSector;
+                    if (SECTOR.GetTypeFromBytes(childNodeBytes) == SECTOR.SectorType.DIR_NODE)
+                    {
+                        childSector = DIR_NODE.CreateFromBytes(drive.Disk.ReadSector(childSectorAt));
+                    } 
+                    else if(SECTOR.GetTypeFromBytes(childNodeBytes) == SECTOR.SectorType.FILE_NODE)
+                    {
+                        childSector = FILE_NODE.CreateFromBytes(drive.Disk.ReadSector(childSectorAt));
+                    }
+                    else
+                    {
+                        throw new Exception("Unexpected sector type whe reading directory's children!");
+                    }
+
+                    // Construct a VirtualNode
+                    VirtualNode childNode = new VirtualNode(drive, childSectorAt, childSector, this);
+
+                    // Add the VirtualNode to the children cache
+                    children.Add(childNode.Name, childNode);
+                }
+            }
         }
 
         private void CommitChildren()
         {
-            // TODO: VirtualNode.CommitChildren()
+            if (children != null)
+            {
+                // Write changes to the in-memory cache to disk
+                // so that what is in the cache and on the disk is the same
+                // Speciffically, write the list of children back to disk dor this directory
+                // in the directory's data sector!
+
+                // Create a list of children node sectors, in bytes
+                byte[] rawList = new byte[drive.BytesPerDataSector];
+                int i = 0;
+                foreach (VirtualNode child in children.Values)
+                {
+                    int sectorAt = child.nodeSector;
+                    BitConverter.GetBytes(sectorAt).CopyTo(rawList, i);
+                    i += 4;         // 4 byte integers are being copied to the array
+                }
+
+                // write the bytes to the directory's DATA_SECTOR
+                // by replacing it's data bytes with the new list
+                int dataSectorAt = sector.FirstDataAt;
+                DATA_SECTOR dataSector = DATA_SECTOR.CreateFromBytes(drive.Disk.ReadSector(dataSectorAt));
+                dataSector.DataBytes = rawList;
+                drive.Disk.WriteSector(dataSectorAt, dataSector.RawBytes);
+
+                // Update the number of children in the dir's node on disk
+                (sector as DIR_NODE).EntryCount = children.Count;
+                drive.Disk.WriteSector(nodeSector, sector.RawBytes);
+            }
+
         }
 
         public VirtualNode CreateDirectoryNode(string name)
         {
-            // TODO: VirtualNode.CreateDirectoryNode()
-            return null;
+            // Create a new dicrectory, both on disk and in memory
+
+            // Get 2 free sectors to use for the new directory
+            // First Sector: DIR_NODE, containing metadata for the new directory
+            // Second Sector: DATA_SECTOR, containing the list of children for the ne directory
+            int[] freeSectors = drive.GetNextFreeSectors(2);
+            if (freeSectors == null || freeSectors.Length != 2)
+                throw new Exception("Can't find 2 free sectors for a new directory!");
+
+            int newDirNodeAt = freeSectors[0];
+            int newDataSectorAt = freeSectors[1];
+
+            // Create the DIR_NODE sector on disk for the new directory
+            // New directory is initially empty
+            int bps = drive.Disk.BytesPerSector;
+            DIR_NODE dirNode = new DIR_NODE(bps, newDataSectorAt, name, 0);
+
+            //Create the DATA_SECTOR sector on disk for the new directory
+            // initially empty data sector for this new directory
+            DATA_SECTOR dataSector = new DATA_SECTOR(bps, 0, null);
+
+            // Write sectors to disk
+            drive.Disk.WriteSector(newDirNodeAt, dirNode.RawBytes);
+            drive.Disk.WriteSector(newDataSectorAt, dataSector.RawBytes);
+
+            // Create a new VirtualNode instance
+            VirtualNode newVirtualNode = new VirtualNode(drive, newDirNodeAt, dirNode, this);
+
+            // Add this to the in-memory cache of this directory's children
+            LoadChildren();
+            children.Add(name, newVirtualNode);
+            CommitChildren();
+
+            // Return the new VirtualNode instace
+            return newVirtualNode;
         }
 
         public VirtualNode CreateFileNode(string name)
@@ -214,8 +350,11 @@ namespace SimpleFileSystem
 
         public IEnumerable<VirtualNode> GetChildren()
         {
-            // TODO: VirtualNode.GetChildren()
-            return null;
+            // Make sure the cache is valid
+            LoadChildren();
+
+            // Return the children!
+            return children.Values;
         }
 
         public VirtualNode GetChild(string name)

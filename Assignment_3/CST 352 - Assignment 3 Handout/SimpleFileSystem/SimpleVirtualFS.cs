@@ -305,33 +305,49 @@ namespace SimpleFileSystem
 
         public VirtualNode CreateDirectoryNode(string name)
         {
-            // Create a new dicrectory, both on disk and in memory
+            return CreateNode(name, SECTOR.SectorType.DIR_NODE);
+        }
 
-            // Get 2 free sectors to use for the new directory
-            // First Sector: DIR_NODE, containing metadata for the new directory
-            // Second Sector: DATA_SECTOR, containing the list of children for the ne directory
+        public VirtualNode CreateFileNode(string name)
+        {
+            // Create a new file, both on disk and in memory
+            return CreateNode(name, SECTOR.SectorType.FILE_NODE);
+        }
+
+        private VirtualNode CreateNode(string name, SECTOR.SectorType type)
+        {
+            // Create a new file, both on disk and in memory
+            // type may be DIR_NODE or FILE_NODE
+
+            if (type != SECTOR.SectorType.DIR_NODE && type != SECTOR.SectorType.FILE_NODE)
+                throw new Exception("Illegal type, CreateNode only take DIR_NODE and FILE_NODE types!");
+
+            // Get 2 free sectors
+            // First Sector: NODE, containing metadata 
+            // Second Sector: DATA_SECTOR, containing the new node's data
             int[] freeSectors = drive.GetNextFreeSectors(2);
             if (freeSectors == null || freeSectors.Length != 2)
-                throw new Exception("Can't find 2 free sectors for a new directory!");
-
-            int newDirNodeAt = freeSectors[0];
+                throw new Exception("Can't find 2 free sectors for a new " +
+                    (type == SECTOR.SectorType.DIR_NODE ? "directory" : "file") + "!");
+            int newNodeAt = freeSectors[0];
             int newDataSectorAt = freeSectors[1];
 
-            // Create the DIR_NODE sector on disk for the new directory
-            // New directory is initially empty
+            // Create the node sector on disk, initially empty
             int bps = drive.Disk.BytesPerSector;
-            DIR_NODE dirNode = new DIR_NODE(bps, newDataSectorAt, name, 0);
+            NODE newNode = ( type == SECTOR.SectorType.DIR_NODE 
+                ? new DIR_NODE(bps, newDataSectorAt, name, 0) as NODE 
+                : new FILE_NODE(bps, newDataSectorAt, name, 0) as NODE);
 
             //Create the DATA_SECTOR sector on disk for the new directory
             // initially empty data sector for this new directory
             DATA_SECTOR dataSector = new DATA_SECTOR(bps, 0, null);
 
             // Write sectors to disk
-            drive.Disk.WriteSector(newDirNodeAt, dirNode.RawBytes);
+            drive.Disk.WriteSector(newNodeAt, newNode.RawBytes);
             drive.Disk.WriteSector(newDataSectorAt, dataSector.RawBytes);
 
             // Create a new VirtualNode instance
-            VirtualNode newVirtualNode = new VirtualNode(drive, newDirNodeAt, dirNode, this);
+            VirtualNode newVirtualNode = new VirtualNode(drive, newNodeAt, newNode, this);
 
             // Add this to the in-memory cache of this directory's children
             LoadChildren();
@@ -340,12 +356,6 @@ namespace SimpleFileSystem
 
             // Return the new VirtualNode instace
             return newVirtualNode;
-        }
-
-        public VirtualNode CreateFileNode(string name)
-        {
-            // TODO: VirtualNode.CreateFileNode()
-            return null;
         }
 
         public IEnumerable<VirtualNode> GetChildren()
@@ -377,12 +387,20 @@ namespace SimpleFileSystem
         public byte[] Read(int index, int length)
         {
             // TODO: VirtualNode.Read()
+            // Figure out which sectors the data is in
+            // Assemble all the fragments of data into a single byte[] and return it.
             return null;
         }
 
         public void Write(int index, byte[] data)
         {
             // TODO: VirtualNode.Write()
+            // Use LoadBlocks() and CommitBlocks() after modifying the in-memory cache of blocks
+            // Write data to data sector for this file
+            // starting at index.. in some sector for this file.
+            // TODO: figure out which sector the data starts in, 
+            // how many sectors to write across and which sector the data ends in
+            // Add more data sectors to the chain as needed
         }
     }
 
@@ -418,6 +436,7 @@ namespace SimpleFileSystem
         public void CommitBlock()
         {
             // TODO: VirtualBlock.CommitBlock()
+            // Check dirty flag before commiting
         }
 
         public static byte[] ReadBlockData(VirtualDrive drive, List<VirtualBlock> blocks, int startIndex, int length)

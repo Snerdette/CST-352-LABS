@@ -376,12 +376,39 @@ namespace SimpleFileSystem
 
         private void LoadBlocks()
         {
-            // TODO: VirtualNode.LoadBlocks()
+            // Read each block if not alread in cache
+            if (blocks == null)
+            {
+                // The cache is currently empty, so create and fill it!
+                blocks = new List<VirtualBlock>();
+
+                // Read the data sectors off the disk for this file and...
+                int dataSectorAt = sector.FirstDataAt;
+                while (dataSectorAt != 0)
+                {
+                    // ...create VirtualBlocks for them and add to the cache
+                    DATA_SECTOR dataSector = DATA_SECTOR.CreateFromBytes(drive.Disk.ReadSector(dataSectorAt));
+                    VirtualBlock vb = new VirtualBlock(drive, dataSectorAt, dataSector);
+                    blocks.Add(vb);
+
+                    // Go on to the next data sector
+                    dataSectorAt = dataSector.NextSectorAt;
+                }
+                
+            }
         }
 
         private void CommitBlocks()
         {
-            // TODO: VirtualNode.CommitBlocks()
+            // Commit all blocks in the cache
+            if (blocks != null)
+            {
+                // Commit each block to disk
+                foreach (VirtualBlock vb in blocks)
+                {
+                    vb.CommitBlock();
+                }
+            }
         }
 
         public byte[] Read(int index, int length)
@@ -389,18 +416,47 @@ namespace SimpleFileSystem
             // TODO: VirtualNode.Read()
             // Figure out which sectors the data is in
             // Assemble all the fragments of data into a single byte[] and return it.
-            return null;
+
+            if (!IsFile)
+                throw new Exception("Must be a file to read bytes!");
+
+            // Make sure the cache is filled
+            LoadBlocks();
+
+            // Copy the data from the blocks
+            byte[] result = VirtualBlock.ReadBlockData(drive, blocks, index, length);
+
+            // Return the data
+            return result;
         }
 
         public void Write(int index, byte[] data)
         {
-            // TODO: VirtualNode.Write()
-            // Use LoadBlocks() and CommitBlocks() after modifying the in-memory cache of blocks
-            // Write data to data sector for this file
-            // starting at index.. in some sector for this file.
-            // TODO: figure out which sector the data starts in, 
-            // how many sectors to write across and which sector the data ends in
-            // Add more data sectors to the chain as needed
+           
+
+            if (!IsFile)
+                throw new Exception("Must be a file to write bytes!");
+
+            // Make sure the cache is filled!
+            LoadBlocks();
+
+
+            // Write the data to the blocks
+            VirtualBlock.WriteBlockData(drive, blocks, index, data);
+            
+
+            //Write the blocks 
+            CommitBlocks();
+
+            // Update file length in file node sector
+            // Make sure to incease the file length as needed
+            if (index + data.Length > FileLength)
+            {
+                (sector as FILE_NODE).FileSize = index + data.Length;
+                drive.Disk.WriteSector(nodeSector, sector.RawBytes);
+            }
+           
+            
         }
     }
 
@@ -435,19 +491,41 @@ namespace SimpleFileSystem
 
         public void CommitBlock()
         {
-            // TODO: VirtualBlock.CommitBlock()
-            // Check dirty flag before commiting
+            // Commit only if dirty
+            if (dirty)
+            {
+                // write the data to disk
+                drive.Disk.WriteSector(sectorAddress, sector.RawBytes);
+
+                // It's nice and clean now
+                dirty = false;
+            }
         }
 
         public static byte[] ReadBlockData(VirtualDrive drive, List<VirtualBlock> blocks, int startIndex, int length)
         {
-            // TODO: VirtualBlock.ReadBlockData()
+            // Copy the data into the block, starting at the correct index
+            byte[] db = new byte[length];
+            VirtualBlock vb = blocks[0];
+            int fromStart = startIndex % drive.BytesPerDataSector;
+            CopyBytes(length, vb.sector.DataBytes, fromStart, db, 0);
+           
             return null;
         }
 
         public static void WriteBlockData(VirtualDrive drive, List<VirtualBlock> blocks, int startIndex, byte[] data)
         {
-            // TODO: VirtualBlock.WriteBlockData()
+            // Assume 1 block only
+
+            // Copy the data into the block, starting at the correct index
+            VirtualBlock vb = blocks[0];
+            int toStart = startIndex % drive.BytesPerDataSector;
+            byte[] db = vb.sector.DataBytes;
+            CopyBytes(data.Length, data, 0, db, toStart);
+            vb.sector.DataBytes = db;
+
+            // Set dirty flag, it's now dirty
+            vb.dirty = true;
         }
 
         public static void ExtendBlocks(VirtualDrive drive, List<VirtualBlock> blocks, int initialFileLength, int finalFileLength)

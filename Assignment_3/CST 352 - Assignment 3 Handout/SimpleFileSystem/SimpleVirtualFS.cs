@@ -369,9 +369,13 @@ namespace SimpleFileSystem
 
         public VirtualNode GetChild(string name)
         {
-            // TODO: VirtualNode.GetChild()
+            LoadChildren();
 
-            return null;
+            if (!children.ContainsKey(name))
+                throw new Exception("Node does not contain child!");
+
+
+            return children[name];
         }
 
         private void LoadBlocks()
@@ -413,10 +417,7 @@ namespace SimpleFileSystem
 
         public byte[] Read(int index, int length)
         {
-            // TODO: VirtualNode.Read()
-            // Figure out which sectors the data is in
-            // Assemble all the fragments of data into a single byte[] and return it.
-
+            
             if (!IsFile)
                 throw new Exception("Must be a file to read bytes!");
 
@@ -440,6 +441,10 @@ namespace SimpleFileSystem
             // Make sure the cache is filled!
             LoadBlocks();
 
+            // Extend the blocks if necessarry
+            int initialFileLength = FileLength;
+            int finalFileLength = Math.Max(index + data.Length, initialFileLength);
+            VirtualBlock.ExtendBlocks(drive, blocks, initialFileLength, finalFileLength);
 
             // Write the data to the blocks
             VirtualBlock.WriteBlockData(drive, blocks, index, data);
@@ -450,9 +455,9 @@ namespace SimpleFileSystem
 
             // Update file length in file node sector
             // Make sure to incease the file length as needed
-            if (index + data.Length > FileLength)
+            if (finalFileLength > initialFileLength)
             {
-                (sector as FILE_NODE).FileSize = index + data.Length;
+                (sector as FILE_NODE).FileSize = finalFileLength;
                 drive.Disk.WriteSector(nodeSector, sector.RawBytes);
             }
            
@@ -504,33 +509,153 @@ namespace SimpleFileSystem
 
         public static byte[] ReadBlockData(VirtualDrive drive, List<VirtualBlock> blocks, int startIndex, int length)
         {
-            // Copy the data into the block, starting at the correct index
-            byte[] db = new byte[length];
-            VirtualBlock vb = blocks[0];
-            int fromStart = startIndex % drive.BytesPerDataSector;
-            CopyBytes(length, vb.sector.DataBytes, fromStart, db, 0);
+            int bdps = drive.BytesPerDataSector;
+            int totalBytesToCopy = length;
+
+            // Create the result byte[] to return at the end
+            byte[] result = new byte[length];
+
+            // Part 1: Find the first block to be read and read the first chunk to the end of it
+            int blockIndex = startIndex / bdps;                     // Index of the first block to be read
+            VirtualBlock block = blocks[blockIndex];
+
+
+            // Copy the first chunk into the first block
+            int fromStart = startIndex % bdps;                                  // Where to start in the first block
+            int bytesToCopy = Math.Min(totalBytesToCopy, bdps - fromStart);    // How many bytes to copy into the first block
+            int toStart = 0;
+            CopyBytes(bytesToCopy, block.Data, fromStart, result, toStart);
+            
+            // Move on to the next chunk of data
+            toStart += bytesToCopy;
+
+            // Part 2: Loop hoguh the middle blokcj and overwrite them completly with full chunks of data
+            while (toStart < (totalBytesToCopy - bdps))
+            {
+                // Next block
+                block = blocks[++blockIndex];
+
+                // Copy next chunk
+                bytesToCopy = bdps;     // Full block
+                fromStart = 0;            // Overwrite starting at beginning of block
+                CopyBytes(bytesToCopy, block.Data, fromStart, result, toStart);
+
+                // Move on to the next chunk of data
+                toStart += bytesToCopy;
+            }
+
+            // Part 3: Read the first part of the last block with the final chunk
+            if (toStart < totalBytesToCopy)
+            {
+                // Next block
+                block = blocks[++blockIndex];
+
+                // Copy last chunk
+                bytesToCopy = totalBytesToCopy - toStart;
+                fromStart = 0;                                            // Overwrite starting at beginning of block
+                CopyBytes(bytesToCopy, block.Data, fromStart, result, toStart);
+            }
            
-            return null;
+            return result;
         }
 
         public static void WriteBlockData(VirtualDrive drive, List<VirtualBlock> blocks, int startIndex, byte[] data)
         {
-            // Assume 1 block only
+            int bdps = drive.BytesPerDataSector;
+            int totalBytesToCopy = data.Length;
+            
+            // Part 1: Find the first block to be written and write the first chunk to the end of it
+            int blockIndex = (startIndex / bdps);                     // Index of the first block to be written
+            VirtualBlock block = blocks[blockIndex];
 
-            // Copy the data into the block, starting at the correct index
-            VirtualBlock vb = blocks[0];
-            int toStart = startIndex % drive.BytesPerDataSector;
-            byte[] db = vb.sector.DataBytes;
-            CopyBytes(data.Length, data, 0, db, toStart);
-            vb.sector.DataBytes = db;
 
-            // Set dirty flag, it's now dirty
-            vb.dirty = true;
+            // Copy the first chunk into the first block
+            int toStart = startIndex % bdps;                        // Where to start in the first block
+            int bytesToCopy = Math.Min(totalBytesToCopy, bdps - toStart);    // How many bytes to copy into the first block
+            int fromStart = 0;
+            byte[] db = block.sector.DataBytes;
+            CopyBytes(bytesToCopy, data, fromStart, db, toStart);
+            block.sector.DataBytes = db;
+            block.dirty = true;
+
+            // Move on to the next chunk of data
+            fromStart += bytesToCopy;
+
+            // Part 2: Loop hoguh the middle blokcj and overwrite them completly with full chunks of data
+            while (fromStart < (totalBytesToCopy - bdps))
+            {
+                // Next block
+                block = blocks[++blockIndex];
+
+                // Copy next chunk
+                bytesToCopy = bdps;     // Full block
+                toStart = 0;            // Overwrite starting at beginning of block
+                db = block.sector.DataBytes;
+                CopyBytes(bytesToCopy, data, fromStart, db, toStart);
+                block.sector.DataBytes = db;
+                block.dirty = true;
+
+                // Move on to the next chunk of data
+                fromStart += bytesToCopy;
+            }
+
+            // Part 3: Write the first part of the last block with the final chunk
+            if (fromStart < totalBytesToCopy)
+            {
+                // Next block
+                block = blocks[++blockIndex];
+
+                // Copy last chunk
+                bytesToCopy = totalBytesToCopy - fromStart;
+                toStart = 0;                                            // Overwrite starting at beginning of block
+                db = block.sector.DataBytes;
+                CopyBytes(bytesToCopy, data, fromStart, db, toStart);
+                block.sector.DataBytes = db;
+                block.dirty = true;
+            }
         }
 
         public static void ExtendBlocks(VirtualDrive drive, List<VirtualBlock> blocks, int initialFileLength, int finalFileLength)
         {
-            // TODO: VirtualBlock.ExtendBlocks()
+            // If the file length has grown...
+            if (finalFileLength > initialFileLength)
+            {
+                // ...and if we need ore blocks...
+                int finalBlockCount = BlocksNeeded(drive, finalFileLength);
+                if (finalBlockCount > blocks.Count)
+                {
+                    // how many new blocks to do what we need to do?
+                    int neededNewBlocks = finalBlockCount - blocks.Count;
+
+                    // Get needed number of free sectors
+                    int[] freeSectors = drive.GetNextFreeSectors(neededNewBlocks);
+
+                    // Allocate and connect them up
+                    VirtualBlock previousBlock = blocks.Last();
+                    for (int i = 0; i < neededNewBlocks; i++)
+                    {
+
+                        // write out the previousBlock to connect it to this new block
+                        previousBlock.sector.NextSectorAt = freeSectors[i];
+                        previousBlock.dirty = true;
+
+
+                        // instantiate new DATA_SECTOR
+                        DATA_SECTOR newDataSector = new DATA_SECTOR(drive.Disk.BytesPerSector, 0, null);
+
+                        // instantiate new VirtualBlock
+                        VirtualBlock newBlock = new VirtualBlock(drive, freeSectors[i], newDataSector, true);
+
+                        // Add new VirtualBlocks to the list of blocks
+                        blocks.Add(newBlock);
+
+                        // Update prev block
+                        previousBlock = newBlock;
+                    }
+
+
+                }
+            }
         }
 
         private static int BlocksNeeded(VirtualDrive drive, int numBytes)

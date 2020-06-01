@@ -201,24 +201,109 @@ namespace SimpleFileSystem
         public void Rename(string name)
         {
             // rename this node, update parent as needed, save new name on disk
-            // TODO: VirtualNode.Rename()
+
+            // Cannot rename the root node
+            if (parent == null)
+                throw new Exception("Cannot rename the root node!");
+           
+            // Validate name, e.g. no /, not empty, whitespace, not null, not . or not ..
+            // Name muct be 12 characters or less
+            if(string.IsNullOrWhiteSpace(name) 
+                || name == "." || name == ".."
+                || name.Contains('/')
+                || name.Length > FSConstants.MAX_FILENAME)
+            {
+                throw new Exception("Invalid name!");
+            }
+
+            // Make our parent's cache of children are loaded and remove the reference to the old name.
+            parent.LoadChildren();
+            parent.children.Remove(Name);
+
+            // Set the nodes name to the new name and commit it to disk
+            sector.Name = name;
+            drive.Disk.WriteSector(nodeSector, sector.RawBytes);
+
+            // Add this node back to the parent's cache with the new name
+            parent.children.Add(name, this);
+            
         }
 
         public void Move(VirtualNode destination)
         {
-            // remove this node from it's current parent and attach it to it's new parent
+            // remove this node from it's current parent and attach it to the new one
             // update the directory information for both parents on disk
-            // TODO: VirtualNode.Move()
+
+            // Don't try and move the root!
+            if (parent == null)
+                throw new Exception("Can't Move the root!");
+
+            // Validate destination
+            if (destination == null || !destination.IsDirectory)
+                throw new Exception("Invalid destination for Move!");
+
+            // Remove node from current parent
+            parent.LoadChildren();
+            parent.children.Remove(Name);
+            parent.CommitChildren();
+
+            // Set parent to new parent
+            parent = destination;
+
+            // Add node to new parent
+            parent.LoadChildren();
+            parent.children.Add(Name, this);
+            parent.CommitChildren();            
         }
 
         public void Delete()
         {
-            // make sectors free!
-            // wipe data for this node from the disk
-            // wipe this node from parent directory from the disk
-            // remove this node from it's parent node
+           /* make sectors free!
+             - wipe data for this node from the disk
+             - wipe this node from parent directory from the disk
+             - remove this node from it's parent node 
+           */
 
-            // TODO: VirtualNode.Delete()
+            // Don't try to nuke the root!
+                                  if (parent == null)
+                throw new Exception("Can't delete the root!");
+
+            // Recurse into directory contents and delete children
+            if (IsDirectory)
+            {
+                LoadChildren();
+                // Loop throught a copy of the children cahce and delete each
+                foreach (VirtualNode child in children.Values.ToArray())
+                {
+                    child.Delete();
+                }
+                // NOTE: do not need to call CommitChildren();
+            }
+
+            // Replace data sector(s) with free sector(s)
+            FREE_SECTOR free = new FREE_SECTOR(drive.Disk.BytesPerSector);
+            int dataSectorAt = sector.FirstDataAt;
+            while (dataSectorAt != 0)
+            {
+                // Read the data sector om and save nextSectorAt
+                DATA_SECTOR dataSector = DATA_SECTOR.CreateFromBytes(drive.Disk.ReadSector(dataSectorAt));
+                int nextDataSectorAt = dataSector.NextSectorAt;
+
+                // Replace it
+                drive.Disk.WriteSector(dataSectorAt, free.RawBytes);
+
+                // Next one
+                dataSectorAt = nextDataSectorAt;
+            }
+
+            // Replace node sector with free sector
+            drive.Disk.WriteSector(nodeSector, free.RawBytes);
+
+            // Remove ourself from our parent and commit paren'ts list of children
+            parent.LoadChildren();
+            parent.children.Remove(Name);
+            parent.CommitChildren();
+
         }
 
         private void LoadChildren()
@@ -369,12 +454,14 @@ namespace SimpleFileSystem
 
         public VirtualNode GetChild(string name)
         {
+            // Make sure the cache is filled first
             LoadChildren();
 
+            // Make sure the child is actually there
             if (!children.ContainsKey(name))
                 throw new Exception("Node does not contain child!");
 
-
+            // Return the child
             return children[name];
         }
 

@@ -11,7 +11,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-
 namespace SimpleFileSystem
 {
     public class SimpleFS : FileSystem
@@ -24,7 +23,8 @@ namespace SimpleFileSystem
 
         private const char PATH_SEPARATOR = FSConstants.PATH_SEPARATOR;
         private const int MAX_FILE_NAME = FSConstants.MAX_FILENAME;
-        private const int BLOCK_SIZE = 500;     // 500 bytes... 2 sectors of 256 bytes each (minus sector overhead)
+        // Part of extra credit
+        //private const int BLOCK_SIZE = 500;     // 500 bytes... 2 sectors of 256 bytes each (minus sector overhead)
 
         private VirtualFS virtualFileSystem;
 
@@ -35,38 +35,76 @@ namespace SimpleFileSystem
 
         public void Mount(DiskDriver disk, string mountPoint)
         {
-            // TODO: SimpleFS.Mount()
+            virtualFileSystem.Mount(disk, mountPoint);
         }
 
         public void Unmount(string mountPoint)
         {
-            // TODO: SimpleFS.Unmount()
+            virtualFileSystem.Unmount(mountPoint);
         }
 
         public void Format(DiskDriver disk)
         {
-            // TODO: SimpleFS.Fromat()
+            virtualFileSystem.Format(disk);
         }
 
         public Directory GetRootDirectory()
         {
-            // TODO: SimpleFS.GetRootDirectory()
-            return null;
+            return new SimpleDirectory(virtualFileSystem.RootNode);
         }
 
         public FSEntry Find(string path)
         {
+            // Follow the path down and return a ne directory or file
+            // wrapping the node
+            // Path must be an absolute path, including the root /
+            // Simplifying assumption... not allowing ".." or "." in our paths
             // good:  /foo/bar, /foo/bar/
             // bad:  foo, foo/bar, //foo/bar, /foo//bar, /foo/../foo/bar
+            if (String.IsNullOrEmpty(path) || path[0] != '/')
+                throw new Exception("Hey! Invalid path!");
 
-            // TODO: SimpleFS.Find()
-            return null;
+            // If path ends in a trailing slash, then...
+            bool mustBeDirectory = false;
+            if (path.EndsWith(PATH_SEPARATOR.ToString()))
+            {
+                // Remove the trailing slash and remember that we expect a directory
+                path = path.Substring(0, path.Length - 1);
+                mustBeDirectory = true;
+            }
+
+            // Walk through path and find the result
+            string[] elements = path.Split(PATH_SEPARATOR);
+            VirtualNode current = virtualFileSystem.RootNode;
+            foreach (string element in elements.Skip(1))    // Skips the first blank
+            {
+                // We need to dig deeper, but we do not have a directory, so return null
+                if (!current.IsDirectory)
+                    return null;
+
+                try
+                {
+                    // Get the named child from the directory
+                    VirtualNode child = current.GetChild(element);
+                    current = child;
+                }
+                catch (Exception)
+                {
+                    // If we can't find the child, return null
+                    return null;
+                }
+            }
+
+            if (mustBeDirectory && !current.IsDirectory)
+                return null;
+
+            return (current.IsDirectory ? new SimpleDirectory(current) as FSEntry : new SimpleFile(current));
         }
 
         public char PathSeparator { get { return PATH_SEPARATOR; } }
         public int MaxNameLength { get { return MAX_FILE_NAME; } }
 
-        #endregion
+        #endregion filesystem
 
         #region implementation
 
@@ -90,28 +128,40 @@ namespace SimpleFileSystem
             {
                 get
                 {
-                    // TODO: SimpleEntry.FullPathName.get
-                    return null;
+                    // Return a full path name to this entry, starting from the root
+                    if (Parent == null)
+                        return Name;
+                    else if (Parent.Name == FSConstants.ROOT_DIR_NAME)
+                        return $"{Parent.Name}{Name}";
+                    else
+                        return $"{Parent.FullPathName}{PATH_SEPARATOR}{ Name}";
                 }
             }
 
             // override in derived classes
             public virtual bool IsDirectory => node.IsDirectory;
+
             public virtual bool IsFile => node.IsFile;
 
             public void Rename(string name)
             {
-                // TODO: SimpleEntry.Rename()
+                node.Rename(name);
             }
 
             public void Move(Directory destination)
             {
-                // TODO: SimpleEntry.Move()
+                if (destination == null)
+                    throw new Exception("Invalid Destination!");
+
+                node.Move((destination as SimpleDirectory).node);
             }
 
             public void Delete()
             {
-                // TODO: SimpleEntry.Delete()
+                node.Delete();
+                node = null;
+                // TODO: Deal with null nodes in the rest f the logial file systems objects
+                // e.g. Move()
             }
         }
 
@@ -127,26 +177,33 @@ namespace SimpleFileSystem
 
             public IEnumerable<Directory> GetSubDirectories()
             {
-                // TODO: SimpleDirectory.GetSubDirectories()
-                return null;
+                List<Directory> result = new List<Directory>();
+                foreach (VirtualNode child in node.GetChildren().Where(vn => vn.IsDirectory))
+                {
+                    result.Add(new SimpleDirectory(child));
+                }
+                return result;
             }
 
             public IEnumerable<File> GetFiles()
             {
-                // TODO: SimpleDirectory.GetFiles()
-                return null;
+                List<File> result = new List<File>();
+                foreach (VirtualNode child in node.GetChildren().Where(vn => vn.IsFile))
+                {
+                    result.Add(new SimpleFile(child));
+                }
+                return result;
             }
 
             public Directory CreateDirectory(string name)
             {
-                // TODO: SimpleDirectory.CreateDirectory()
-                return null;
+                // Example of adapter pattern
+                return new SimpleDirectory(node.CreateDirectoryNode(name));
             }
 
             public File CreateFile(string name)
             {
-                // TODO: SimpleDirectory.CreateFile()
-                return null;
+                return new SimpleFile(node.CreateFileNode(name));
             }
         }
 
@@ -164,10 +221,8 @@ namespace SimpleFileSystem
 
             public FileStream Open()
             {
-                // TODO: SimpleFile.Open()
-                return null;
+                return new SimpleStream(node);
             }
-
         }
 
         //
@@ -185,21 +240,27 @@ namespace SimpleFileSystem
 
             public void Close()
             {
-                // TODO: SimpleStream.Close()
+                // Detatch the stream from the underlying file VirtualNode
+                node = null;
             }
 
             public byte[] Read(int index, int length)
             {
-                // TODO: SimpleStream.Read()
-                return null;
+                if (node == null)
+                    throw new Exception("Stream closed for Read()!");
+
+                return node.Read(index, length);
             }
 
             public void Write(int index, byte[] data)
             {
-                // TODO: SimpleStream.Write()
+                if (node == null)
+                    throw new Exception("Stream closed for Write()!");
+
+                node.Write(index, data);
             }
         }
 
-        #endregion
+        #endregion implementation
     }
 }

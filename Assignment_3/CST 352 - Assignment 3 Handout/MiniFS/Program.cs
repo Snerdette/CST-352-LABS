@@ -24,8 +24,8 @@ namespace MiniFS
             {
                 //TestDisks();
                 //TestPhysicalFileSystem();
-                TestVirtualFileSystem();
-                //TestLogicalFileSystem();
+                //TestVirtualFileSystem();
+                TestLogicalFileSystem();
                 Console.ReadLine();
             }
             catch (Exception ex)
